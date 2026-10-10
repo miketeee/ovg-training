@@ -382,3 +382,28 @@ table.data th { color: var(--chalk-dim); font-weight: 600; }
 .btn.pass { flex: none; min-height: 44px; padding: 0 12px; font-size: 15px; }
 .btn.pass[aria-pressed="true"] { background: transparent; border-color: var(--sage); color: var(--sage); }
 .chart-tip[hidden] { display: none; }
+
+/* =========================================================
+   Stage 6: Plan
+   ========================================================= */
+.choice { display: grid; gap: 8px; margin-bottom: 8px; }
+.choice button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left;
+  min-height: var(--tap); padding: 12px 14px; border-radius: var(--radius-control);
+  background: var(--mat); color: var(--chalk); border: 1px solid var(--mat-edge); font: 16px/1.35 var(--body);
+}
+.choice button b { font-weight: 700; }
+.choice button span { font-size: 14px; color: var(--chalk-dim); }
+.choice button[aria-checked="true"] { border-color: var(--birch); box-shadow: inset 4px 0 0 var(--birch); }
+#pl-list .choice button { background: var(--mat-raised); }
+.warn-text { font-size: 14px; color: var(--rose); }
+.plan-day { margin: 24px 0; padding-bottom: 18px; border-bottom: 1px solid var(--mat-edge); }
+.plan-items { list-style: none; margin: 10px 0 14px; padding: 0; }
+.plan-items > li { display: flex; gap: 14px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--mat-edge); }
+.plan-items > li:last-child { border-bottom: 0; }
+.plan-items .row-num { font-size: 28px; padding-top: 2px; }
+.plan-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.plan-main .row-title { color: var(--chalk); text-decoration: none; }
+.plan-dose { font-weight: 600; color: var(--chalk); font-size: 15px; }
+.plan-info { display: block; padding: 6px 0; }
+.planned { margin: 24px 0 14px; }

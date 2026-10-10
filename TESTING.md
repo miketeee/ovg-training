@@ -143,3 +143,24 @@ Unzip `stage5-site.zip` and upload what's **inside** the folder. The new files a
    - Go back: that family's box shows the highest level you passed.
 7. In the Sheet's **Settings** tab, `ladder.passed` lists the steps you marked. Another device gets them on its next sync.
 8. Turn on airplane mode: charts and ladders still work.
+
+## Stage 6: the plan generator
+
+No Apps Script change this time. Your Apps Script must be the 5.0.3 version you already deployed.
+
+### Update the site
+Unzip `stage6-site.zip` and upload what's **inside** the folder. The new file is `js/plan.js`.
+
+### Test on the phone
+1. Open the app and tap **Reload**. Sync should show **App version 6.0.0**.
+2. Mark your passed steps under **Progress → Ladders**, if you haven't already.
+3. **Plan** tab. One level is already picked, based on the lower of your Pushing and Pulling levels. The note says this suggestion is the site's, NOT IN BOOK. Change it if it's wrong.
+4. Pick **Days a week** and **Focus**. The list shows the book's routines for that level, best match first, each with its chapter and page. A red note means the book writes that routine for a different number of days.
+5. Tap **Build my plan**.
+   - Each exercise shows its dose ("3 sets, 5 → 15 reps, rest 3 min").
+   - Where you've marked steps on that exercise's ladder, the slot moves to your next step. The line underneath shows the book's original pick.
+   - Grey "Comes after…" lines are earlier steps you haven't marked passed.
+   - Red notes are the book's hard rules: iron cross gray cells (p. 447), one-arm chin-up eccentrics (p. 431), kip to cross (pp. 557–558), chair handstand (p. 361) and one-arm handstand (p. 331).
+6. Tap **Start this workout**, or the named day for split routines. The workout opens with a **Still to do** list. Tap an exercise: its planned dose shows above the set form. Log a set, and the exercise leaves the list.
+7. In the Sheet, that workout's row in **Sessions** has a `plan_id` like `og-trained-beginner-static|Workout`, and **Settings** has `plan.current`.
+8. **Plan → Change plan** remembers your last choices. Building again replaces the plan.

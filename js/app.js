@@ -5,9 +5,10 @@ import * as content from './content.js';
 import * as library from './library.js';
 import * as workouts from './workout.js';
 import * as progress from './progress.js';
+import * as plan from './plan.js';
 import { $, esc, plural, today, ago, kb, say, fill } from './ui.js';
 
-export const APP_VERSION = '5.0.3'; // keep in step with VERSION in sw.js
+export const APP_VERSION = '6.0.0'; // keep in step with VERSION in sw.js
 
 /* ---------- header chip + chalk line ---------- */
 
@@ -40,11 +41,6 @@ sync.onStatus(st => {
 
 /* ---------- pages ---------- */
 
-const comingSoon = (title, stage, text) => ({
-  title,
-  render: () => `<h1>${esc(title)}</h1>
-    <div class="empty"><div class="stage">Arrives in Stage ${stage}</div><p class="dim">${esc(text)}</p></div>`,
-});
 
 const routes = {
   today: workouts.today,           // #/today
@@ -56,7 +52,7 @@ const routes = {
   progress: progress.progressPage, // #/progress[?ex=<exercise id>&r=28|90|]
   ladders: progress.laddersPage,   // #/ladders
   ladder: progress.ladderPage,     // #/ladder/<progression id>
-  plan: comingSoon('Plan', 6, 'A routine built from your levels and the book’s programming rules.'),
+  plan: plan.planPage,             // #/plan  and  #/plan/edit
   sync: { title: 'Sync', render: renderSync, bind: bindSync },
 };
 

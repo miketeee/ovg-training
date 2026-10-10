@@ -1,6 +1,7 @@
 // workout.js — the Today tab: start a workout, log sets, edit or delete them, see history.
 import * as log from './log.js';
 import * as content from './content.js';
+import { plannedFor } from './plan.js';
 import { $, $$, esc, plural, say } from './ui.js';
 
 /* ---------- exercise names ---------- */
@@ -156,6 +157,8 @@ async function renderWorkout(ses, page) {
   if (adding && !bl.some(b => b.exercise_id === adding)) bl.push({ exercise_id: adding, sets: [] });
   page.blocks = bl;
   const isActive = activeId === ses.id;
+  const planned = await plannedFor(ses.id, new Set(sets.map(x => x.exercise_id)));
+  const planDose = new Map((planned?.items || []).map(i => [i.exercise_id, i.dose]));
 
   const parts = await Promise.all(bl.map(async b => {
     const e = ex.byId.get(b.exercise_id);
@@ -166,6 +169,7 @@ async function renderWorkout(ses, page) {
       <header class="block-head">
         <span class="row-num">${e?.level ?? '–'}</span>
         <div class="row-main"><h2>${e ? `<a href="#/exercise/${encodeURIComponent(e.id)}">${esc(e.name)}</a>` : esc(exName(b.exercise_id, ex))}</h2>
+        ${planDose.get(b.exercise_id) ? `<span class="plan-dose">Plan: ${esc(planDose.get(b.exercise_id))}</span>` : ''}
         ${last ? `<span class="row-sub">Last time, ${esc(dayTitle(last.session.date))}: ${esc(summaryOf(last.sets))}</span>` : '<span class="row-sub">First time logging this</span>'}</div>
       </header>
       ${b.sets.length ? `<ol class="sets">${b.sets.map((s, i) => `<li><button type="button" class="set-row" data-edit="${esc(s.id)}">
@@ -181,7 +185,11 @@ async function renderWorkout(ses, page) {
     <h1>${esc(dayTitle(ses.date))}</h1>
     <p class="dim">${isActive ? 'In progress. ' : ''}Started ${esc(clock(ses.started_at))}. ${plural(sets.length, 'set')}.</p>
     ${parts.join('') || '<p class="dim">No exercises yet.</p>'}
-    <a class="btn primary wide big" href="#/workout/${encodeURIComponent(ses.id)}/add">Add exercise</a>
+    ${planned?.remaining?.length ? `<section class="planned"><h2>Still to do: ${esc(planned.day === 'Workout' ? 'from your plan' : planned.day)}</h2>
+      <ul class="rows">${planned.remaining.filter(i => i.exercise_id !== adding).map(i => `<li><a class="row" href="#/workout/${encodeURIComponent(ses.id)}?ex=${encodeURIComponent(i.exercise_id)}">
+        <span class="row-num">${i.level ?? '–'}</span><span class="row-main"><span class="row-title">${esc(i.name)}</span>
+        ${i.dose ? `<span class="row-sub">${esc(i.dose)}</span>` : ''}</span></a></li>`).join('')}</ul></section>` : ''}
+    <a class="btn ${planned?.remaining?.length ? '' : 'primary '}wide big" href="#/workout/${encodeURIComponent(ses.id)}/add">Add exercise</a>
     <label for="w-notes">Workout notes</label>
     <textarea id="w-notes" rows="3" placeholder="How it went, anything to remember">${esc(ses.notes || '')}</textarea>
     <p class="msg" id="w-msg" role="status"></p>
