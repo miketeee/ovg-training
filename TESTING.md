@@ -119,3 +119,27 @@ Unzip `stage4-site.zip` and upload what's **inside** the folder, like before. Th
 | "Your Apps Script is the old version…" | Redo step 1: paste Code.gs, then Manage deployments → Edit → **New version** |
 | "Not sent, N waiting" | Open Sync to read the message. Your sets are safe on the phone |
 | An edit made on another device doesn't show | Tap **Sync now**. The newest edit wins |
+
+## Stage 5: progress charts and ladders
+
+No Apps Script change this time.
+
+### Update the site
+Unzip `stage5-site.zip` and upload what's **inside** the folder. The new files are `js/charts.js`, `js/levels.js` and `js/progress.js`.
+
+### Test on the phone
+1. Open the app and tap **Reload**. Sync should show **App version 5.0.0**.
+2. **Progress → Charts**: pick an exercise you've logged at least twice. You see:
+   - a sentence like "Best set went from 5 to 7 reps"
+   - **Best set per workout** (a line)
+   - **Total per workout** (columns)
+   - **Average effort**, if you rated sets
+3. Tap or drag across a chart. A readout shows that workout's date and sets.
+4. Switch between **4 weeks**, **3 months** and **All**. Open **Show as a table**: it lists the same workouts, and each date opens that workout.
+5. **Progress → Ladders**: one box per family, showing your level ("–" until you mark something).
+6. Open a ladder, e.g. **Planche**. It lists every step, highest first; your logged best shows on steps you've done.
+   - Tap **Mark passed** on the steps you can do with solid technique.
+   - Your next step gets a gold edge.
+   - Go back: that family's box shows the highest level you passed.
+7. In the Sheet's **Settings** tab, `ladder.passed` lists the steps you marked. Another device gets them on its next sync.
+8. Turn on airplane mode: charts and ladders still work.

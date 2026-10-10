@@ -4,9 +4,10 @@ import * as sync from './sync.js';
 import * as content from './content.js';
 import * as library from './library.js';
 import * as workouts from './workout.js';
+import * as progress from './progress.js';
 import { $, esc, plural, today, ago, kb, say, fill } from './ui.js';
 
-export const APP_VERSION = '4.0.0'; // keep in step with VERSION in sw.js
+export const APP_VERSION = '5.0.0'; // keep in step with VERSION in sw.js
 
 /* ---------- header chip + chalk line ---------- */
 
@@ -52,7 +53,9 @@ const routes = {
   exercises: library.exerciseList, // #/exercises[?f=family&q=words]
   exercise: library.exerciseDetail,// #/exercise/<id>
   pictures: library.pictures,      // #/pictures[?q=words&s=missing|linked]
-  progress: comingSoon('Progress', 5, 'Charts of your sets over time, and where you stand on each progression ladder.'),
+  progress: progress.progressPage, // #/progress[?ex=<exercise id>&r=28|90|]
+  ladders: progress.laddersPage,   // #/ladders
+  ladder: progress.ladderPage,     // #/ladder/<progression id>
   plan: comingSoon('Plan', 6, 'A routine built from your levels and the book’s programming rules.'),
   sync: { title: 'Sync', render: renderSync, bind: bindSync },
 };
