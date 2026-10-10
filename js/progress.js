@@ -2,6 +2,7 @@
 import * as db from './storage.js';
 import * as log from './log.js';
 import * as lv from './levels.js';
+import * as sync from './sync.js';
 import * as content from './content.js';
 import { draw } from './charts.js';
 import { $, $$, esc, plural, say, FAMILY } from './ui.js';
@@ -240,7 +241,10 @@ export const ladderPage = {
       root.innerHTML = html;
       this.bind(root);
       scrollTo(0, y);
-      say($('#ld-msg', root), `${on ? 'Marked passed' : 'Unmarked'}. ${sent ? 'Saved to your Sheet.' : 'Saved on this phone; it goes to your Sheet when you’re back online.'}`, true);
+      const why = sync.settingError();
+      say($('#ld-msg', root), `${on ? 'Marked passed' : 'Unmarked'}. ${sent ? 'Saved to your Sheet.'
+        : why && navigator.onLine ? `Saved on this phone, but the Sheet didn’t take it: ${why} It will retry.`
+        : 'Saved on this phone; it goes to your Sheet when you’re back online.'}`, sent || !why);
     });
   },
 };

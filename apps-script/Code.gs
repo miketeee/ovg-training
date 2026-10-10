@@ -1,5 +1,5 @@
 /**
- * OVG Training — Google Apps Script back end (Stage 1, + upsertLogs in Stage 4)
+ * OVG Training — Google Apps Script back end (Stage 1, + upsertLogs in Stage 4, + safe settings in 5.0.2)
  *
  * Deploy as a Web app:  Execute as: Me   |   Who has access: Anyone
  * Every request must be a POST with Content-Type: text/plain and a JSON body:
@@ -11,7 +11,7 @@
  */
 
 // ---------- configuration ----------
-var SCHEMA_VERSION = 2;           // 2 = has upsertLogs (edit / delete logged sets)
+var SCHEMA_VERSION = 4;           // 2 = upsertLogs; 3 = settings locked + de-duplicated; 4 = setSettings reads values back
 var MAX_CELL = 45000;            // Sheets cell limit is 50,000 chars; stay under it
 var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -247,16 +247,26 @@ function upsertLogs_(req) {
 }
 
 function getSettings_() {
-  var out = {};
-  rows_('Settings').forEach(function (r) { out[r.key] = r.value; });
-  return { settings: out };
+  // First row wins (the same row upsert_ writes to), so a stray duplicate can never hide a newer value.
+  var out = {}, updated = {};
+  rows_('Settings').forEach(function (r) {
+    if (r.key === '' || out.hasOwnProperty(r.key)) return;
+    out[r.key] = r.value; updated[r.key] = r.updated_at;
+  });
+  return { settings: out, updated_at: updated };
 }
 
 /** setSettings { settings: { key: value, ... } } — upserts each key */
 function setSettings_(req) {
   var s = req.settings || {}, keys = Object.keys(s);
-  keys.forEach(function (k) { upsert_('Settings', 0, k, [k, typeof s[k] === 'string' ? s[k] : JSON.stringify(s[k]), new Date().toISOString()]); });
-  return { saved: keys };
+  var lock = LockService.getScriptLock(); lock.waitLock(20000); // two phones (or two requests) at once can't add duplicate rows
+  try {
+    keys.forEach(function (k) { upsert_('Settings', 0, k, [k, typeof s[k] === 'string' ? s[k] : JSON.stringify(s[k]), new Date().toISOString()]); });
+  } finally { lock.releaseLock(); }
+  // Read back what the Sheet now holds, so the phone can confirm the save.
+  var stored = {};
+  rows_('Settings').forEach(function (r) { if (keys.indexOf(r.key) >= 0 && !stored.hasOwnProperty(r.key)) stored[r.key] = String(r.value); });
+  return { saved: keys, stored: stored };
 }
 
 /** setImageLink { exercise_id, figure, page, drive_link } — upsert by exercise_id + figure */
@@ -264,7 +274,9 @@ function setImageLink_(req) {
   if (!req.exercise_id || !req.figure) throw new Error('Missing exercise_id or figure');
   if (req.drive_link && !fileIdFromLink_(req.drive_link)) throw new Error('That does not look like a Google Drive file link');
   var key = req.exercise_id + '|' + req.figure;
-  upsert_('Images', 0, key, [key, req.exercise_id, req.figure, req.page || '', req.drive_link || '', new Date().toISOString()]);
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try { upsert_('Images', 0, key, [key, req.exercise_id, req.figure, req.page || '', req.drive_link || '', new Date().toISOString()]); }
+  finally { lock.releaseLock(); }
   return { key: key };
 }
 
@@ -311,12 +323,16 @@ function colValues_(sh, col) {
   return sh.getRange(2, col, n - 1, 1).getValues().map(function (r) { return r[0]; });
 }
 
+/** Write `row` to the first row whose key matches (or a new row), and remove any duplicates of that key. */
 function upsert_(tab, keyCol, key, row) {
-  var sh = sheet_(tab), vals = sh.getDataRange().getValues();
+  var sh = sheet_(tab), vals = sh.getDataRange().getValues(), first = -1, dupes = [];
   for (var r = 1; r < vals.length; r++) {
-    if (String(vals[r][keyCol]) === String(key)) { sh.getRange(r + 1, 1, 1, row.length).setValues([row]); return; }
+    if (String(vals[r][keyCol]) !== String(key)) continue;
+    if (first < 0) first = r; else dupes.push(r);
   }
-  sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  if (first >= 0) sh.getRange(first + 1, 1, 1, row.length).setValues([row]);
+  else sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  for (var i = dupes.length - 1; i >= 0; i--) sh.deleteRow(dupes[i] + 1); // bottom-up so row numbers stay right
 }
 
 function removeOlderUploads_(sh, name, keepUploadId) {

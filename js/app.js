@@ -7,7 +7,7 @@ import * as workouts from './workout.js';
 import * as progress from './progress.js';
 import { $, esc, plural, today, ago, kb, say, fill } from './ui.js';
 
-export const APP_VERSION = '5.0.1'; // keep in step with VERSION in sw.js
+export const APP_VERSION = '5.0.3'; // keep in step with VERSION in sw.js
 
 /* ---------- header chip + chalk line ---------- */
 
@@ -62,10 +62,16 @@ const routes = {
 
 /* ---------- Sync page ---------- */
 
+function settingsLine(p) {
+  if (!p) return 'never';
+  return p.ok ? `${ago(p.at)}${p.confirmed ? ', confirmed by the Sheet' : ''}` : `failed ${ago(p.at)}: ${p.error}`;
+}
+
 async function renderSync() {
-  const [cfg, cp, sessions, sets, persisted] = await Promise.all([
+  const [cfg, cp, sessions, sets, persisted, lastPush] = await Promise.all([
     sync.getConfig(), sync.getCheckpoint(), db.count('sessions'), db.count('sets'),
     navigator.storage?.persisted ? navigator.storage.persisted().catch(() => false) : false,
+    sync.lastSettingsPush(),
   ]);
   const setUp = !!(cfg.url && cfg.secret);
   return `<h1>Sync</h1>
@@ -118,6 +124,7 @@ async function renderSync() {
       <dt>Workouts stored</dt><dd id="f-sessions">${sessions}</dd>
       <dt>Sets stored</dt><dd id="f-sets">${sets}</dd>
       <dt>Last synced</dt><dd id="f-last">${esc(ago(cp.last_pull || cp.last_flush))}</dd>
+      <dt>Settings last sent</dt><dd id="f-settings">${esc(settingsLine(lastPush))}</dd>
       <dt>Storage kept safe</dt><dd>${persisted ? 'Yes' : 'Not guaranteed'}</dd>
       <dt>App version</dt><dd>${APP_VERSION}</dd>
     </dl>
@@ -131,7 +138,7 @@ function bindSync(root) {
 
   const off = [];
   const paint = st => {
-    if (!root.isConnected) return;
+    if (!$('#count-n', root)) return; // the Sync page isn't showing any more
     const w = st.waiting || { total: 0, sets: 0, sessions: 0 };
     const n = w.sets, extra = w.sessions;
     $('#count-n', root).textContent = n;
@@ -140,9 +147,10 @@ function bindSync(root) {
     $('#count-label', root).innerHTML = (n === 1 ? 'set' : 'sets') + ' waiting to sync' + (plus ? `<small>plus ${plus}</small>` : '');
     if (!['sending', 'pulling'].includes(st.state)) {
       Promise.all([db.count('sessions'), db.count('sets'), sync.getCheckpoint()]).then(([a, b, cp]) => {
-        if (!root.isConnected) return;
+        if (!$('#f-sessions', root)) return;
         $('#f-sessions', root).textContent = a; $('#f-sets', root).textContent = b;
         $('#f-last', root).textContent = ago(cp.last_pull || cp.last_flush);
+        sync.lastSettingsPush().then(p => { const el = $('#f-settings', root); if (el) el.textContent = settingsLine(p); });
       }).catch(() => {});
     }
     const bar = $('#bar', root);
@@ -190,9 +198,9 @@ function bindSync(root) {
     try {
       const r = await sync.ping({ url, secret });
       await sync.saveConfig(url, secret);
-      show(msg, (r.schema || 1) < 2
-        ? 'Connected and saved, but your Apps Script is the old version. Paste the new Code.gs, then Deploy → Manage deployments → Edit → Version: New version → Deploy.'
-        : `Connected. Saved on this phone. Your Sheet has ${plural((r.tabs || []).length, 'tab')}.`, (r.schema || 1) >= 2);
+      show(msg, (r.schema || 1) < 4
+        ? 'Connected and saved, but your Apps Script is an old version. Paste the new Code.gs, then Deploy → Manage deployments → Edit → Version: New version → Deploy.'
+        : `Connected. Saved on this phone. Your Sheet has ${plural((r.tabs || []).length, 'tab')}.`, (r.schema || 1) >= 4);
       $('#forget', root).disabled = false;
       $('#c-get', root).disabled = false;
       sync.clearError();
@@ -212,7 +220,7 @@ function bindSync(root) {
       armed = true;
       e.currentTarget.textContent = 'Tap again to forget';
       show(msg, 'Your logs stay on this phone and in your Sheet. You’ll need to paste the URL and phrase again to sync.');
-      setTimeout(() => { if (armed && root.isConnected) { armed = false; e.target.textContent = 'Forget URL and phrase'; show(msg, ''); } }, 5000);
+      setTimeout(() => { if (armed && msg.isConnected) { armed = false; e.target.textContent = 'Forget URL and phrase'; show(msg, ''); } }, 5000);
       return;
     }
     await sync.forgetDevice();
@@ -229,7 +237,7 @@ function bindContent(root) {
   let chosen = [];
 
   const summary = async () => {
-    if (!root.isConnected) return;
+    if (!$('#c-summary', root)) return;
     const [files, up, last] = await Promise.all([content.listFiles(), content.uploadState(), db.getValue('checkpoints', 'content.last_check')]);
     const size = files.reduce((n, f) => n + f.size, 0);
     const guides = files.filter(f => f.kind === 'guide').length, data = files.filter(f => f.kind === 'data').length;

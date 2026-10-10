@@ -194,19 +194,45 @@ export async function saveSetting(key, value) {
   dirty.add(key);
   await db.setValue('checkpoints', 'settings.dirty', [...dirty]);
   let sent = false;
-  try { sent = await pushSettings(); } catch { /* sent at the next sync */ }
+  let error = '';
+  try { sent = await pushSettings(); } catch (e) { error = e.message; /* sent at the next sync */ }
   await refresh();
   if (!sent) syncSoon();
-  return sent; // true = already in the Sheet; false = waiting on this phone
+  lastSettingError = error;
+  return sent; // true = already in the Sheet; false = waiting on this phone (see settingError())
 }
 
-/** Send settings changed on this phone. Returns true when nothing is left waiting. */
-async function pushSettings(cfg) {
+let lastSettingError = '';
+/** Why the last saveSetting couldn't reach the Sheet ('' if it did, or if just offline). */
+export const settingError = () => lastSettingError;
+export const lastSettingsPush = () => db.getValue('checkpoints', 'settings.last_push', null);
+
+/** Send settings changed on this phone. Returns true when nothing is left waiting.
+ *  Only one send runs at a time (two at once could race on the Sheet). */
+let pushing = null;
+function pushSettings(cfg) {
+  const run = (pushing || Promise.resolve()).then(() => pushSettingsNow(cfg));
+  const tail = run.catch(() => {}).then(() => { if (pushing === tail) pushing = null; });
+  pushing = tail;
+  return run;
+}
+
+async function pushSettingsNow(cfg) {
   const keys = await db.getValue('checkpoints', 'settings.dirty', []);
   if (!keys.length) return true;
   const settings = {};
   for (const k of keys) settings[k] = await db.getValue('settings', k, '');
-  await call('setSettings', { settings }, cfg);
+  let res;
+  try {
+    res = await call('setSettings', { settings }, cfg);
+    // Code.gs 5.0.3+ reads the values back; make sure the Sheet really holds what we sent.
+    const wrong = res.stored ? keys.filter(k => String(res.stored[k]) !== String(settings[k])) : [];
+    if (wrong.length) throw new SyncError('server', `The Sheet didn't keep the new value for ${wrong.join(', ')}.`);
+    await db.setValue('checkpoints', 'settings.last_push', { at: new Date().toISOString(), keys, ok: true, confirmed: !!res.stored });
+  } catch (e) {
+    await db.setValue('checkpoints', 'settings.last_push', { at: new Date().toISOString(), keys, ok: false, error: e.message });
+    throw e;
+  }
   // Keep any key that changed again while this request was out.
   const still = [];
   for (const k of await db.getValue('checkpoints', 'settings.dirty', [])) {
@@ -219,10 +245,16 @@ async function pushSettings(cfg) {
 
 async function pullSettings(cfg) {
   const res = await call('getSettings', {}, cfg);
-  const now = new Date().toISOString();
   const dirty = new Set(await db.getValue('checkpoints', 'settings.dirty', []));
-  const ops = Object.entries(res.settings || {}).filter(([key]) => !dirty.has(key)) // unsent local change wins
-    .map(([key, value]) => ({ store: 'settings', put: { key, value, updated_at: now } }));
+  const stamps = res.updated_at || {}; // sent by Code.gs schema 3+
+  const ops = [];
+  for (const [key, value] of Object.entries(res.settings || {})) {
+    if (dirty.has(key)) continue; // an unsent change on this phone wins
+    const mine = await db.get('settings', key);
+    const theirs = stamps[key] || '';
+    if (mine && theirs && String(mine.updated_at || '') > String(theirs)) continue; // ours is newer
+    ops.push({ store: 'settings', put: { key, value, updated_at: theirs || new Date().toISOString() } });
+  }
   if (ops.length) await db.batch(ops);
 }
 
