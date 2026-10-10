@@ -2,7 +2,7 @@
 // Only this site's own files are cached. Requests to your Apps Script
 // (POST, script.google.com) are never touched or stored here.
 
-const VERSION = '2.0.0'; // bump on every release (matches APP_VERSION in js/app.js)
+const VERSION = '3.0.0'; // bump on every release (matches APP_VERSION in js/app.js)
 const CACHE = `ovg-shell-${VERSION}`;
 const SHELL = [
   './',
@@ -11,6 +11,10 @@ const SHELL = [
   'js/app.js',
   'js/storage.js',
   'js/sync.js',
+  'js/ui.js',
+  'js/md.js',
+  'js/content.js',
+  'js/library.js',
   'manifest.json',
   'icons/icon-192.png',
   'icons/icon-512.png',

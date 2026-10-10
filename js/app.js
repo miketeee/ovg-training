@@ -1,22 +1,11 @@
 // app.js — router, header status, and the pages built so far.
 import * as db from './storage.js';
 import * as sync from './sync.js';
+import * as content from './content.js';
+import * as library from './library.js';
+import { $, esc, plural, today, ago, kb, say, fill } from './ui.js';
 
-export const APP_VERSION = '2.0.0'; // keep in step with VERSION in sw.js
-
-const $ = (sel, root = document) => root.querySelector(sel);
-export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-
-function ago(iso) {
-  if (!iso) return 'never';
-  const s = Math.round((Date.now() - new Date(iso)) / 1000);
-  if (s < 45) return 'just now';
-  if (s < 3600) return plural(Math.round(s / 60), 'minute') + ' ago';
-  if (s < 86400) return plural(Math.round(s / 3600), 'hour') + ' ago';
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
+export const APP_VERSION = '3.0.0'; // keep in step with VERSION in sw.js
 
 /* ---------- header chip + chalk line ---------- */
 
@@ -72,7 +61,10 @@ const routes = {
           <dt>Sets on this phone</dt><dd>${sets}</dd></dl></div>`;
     },
   },
-  guide: comingSoon('Guide', 3, 'The guide and the exercise library load from your Google Sheet once sync is set up, then stay on this phone for offline use.'),
+  guide: library.guideIndex,       // #/guide            and #/guide/<file>[/<section>]
+  exercises: library.exerciseList, // #/exercises[?f=family&q=words]
+  exercise: library.exerciseDetail,// #/exercise/<id>
+  pictures: library.pictures,      // #/pictures[?q=words&s=missing|linked]
   progress: comingSoon('Progress', 5, 'Charts of your sets over time, and where you stand on each progression ladder.'),
   plan: comingSoon('Plan', 6, 'A routine built from your levels and the book’s programming rules.'),
   sync: { title: 'Sync', render: renderSync, bind: bindSync },
@@ -111,6 +103,25 @@ async function renderSync() {
     <p class="msg" id="cfg-msg" role="status"></p>
   </form>
 
+  <h2>Book content</h2>
+  <section class="panel" aria-labelledby="h-content">
+    <p id="c-summary">Checking…</p>
+    <div class="bar" id="c-bar" hidden><i></i></div>
+    <p class="msg" id="c-msg" role="status"></p>
+    <div class="actions">
+      <button class="btn primary" id="c-get" type="button" ${setUp ? '' : 'disabled'}>Get latest from Sheet</button>
+      <button class="btn wide" id="c-resume" type="button" style="flex-basis:100%" hidden>Resume upload</button>
+    </div>
+    <details class="more" id="c-upload-box">
+      <summary id="h-content">Upload content files to your Sheet</summary>
+      <p class="small">Do this once, ideally from a computer, with the content files (the guide <code>.md</code> files and the four <code>.json</code> files). They go to your Sheet and onto this device. Other devices then tap <strong>Get latest from Sheet</strong>. Never put these files on GitHub.</p>
+      <label class="btn wide filepick" for="c-files">Choose files</label>
+      <input id="c-files" type="file" multiple accept=".md,.json,text/markdown,application/json" class="sr">
+      <p class="small" id="c-chosen" aria-live="polite"></p>
+      <button class="btn primary wide" id="c-send" type="button" hidden>Upload</button>
+    </details>
+  </section>
+
   <h2>Try the outbox</h2>
   <div class="panel">
     <p>Adds a practice set to a workout called “Stage 2 test.” Try it in airplane mode: the count above goes up, then sends itself when you’re back online.</p>
@@ -133,7 +144,7 @@ async function renderSync() {
 }
 
 function bindSync(root) {
-  const show = (el, text, good) => { el.textContent = text; el.className = 'msg' + (good === true ? ' good' : good === false ? ' bad' : ''); };
+  const show = say;
 
   const off = [];
   const paint = st => {
@@ -197,6 +208,7 @@ function bindSync(root) {
       await sync.saveConfig(url, secret);
       show(msg, `Connected. Saved on this phone. Your Sheet has ${plural((r.tabs || []).length, 'tab')}.`, true);
       $('#forget', root).disabled = false;
+      $('#c-get', root).disabled = false;
       sync.clearError();
       sync.syncNow({ full: true });
     } catch (err) {
@@ -224,6 +236,8 @@ function bindSync(root) {
     }
   };
 
+  off.push(bindContent(root));
+
   let armed = false;
   $('#forget', root).onclick = async e => {
     const msg = $('#forget-msg', root);
@@ -241,27 +255,110 @@ function bindSync(root) {
   return () => off.forEach(f => f());
 }
 
+/* ---------- Book content (on the Sync page) ---------- */
+
+function bindContent(root) {
+  const msg = $('#c-msg', root), bar = $('#c-bar', root);
+  let chosen = [];
+
+  const summary = async () => {
+    if (!root.isConnected) return;
+    const [files, up, last] = await Promise.all([content.listFiles(), content.uploadState(), db.getValue('checkpoints', 'content.last_check')]);
+    const size = files.reduce((n, f) => n + f.size, 0);
+    const guides = files.filter(f => f.kind === 'guide').length, data = files.filter(f => f.kind === 'data').length;
+    $('#c-summary', root).textContent = files.length
+      ? `On this device: ${plural(guides, 'guide file')} and ${plural(data, 'data file')} (${kb(size)}). Last checked ${ago(last)}.`
+      : 'Nothing on this device yet.';
+    const resume = $('#c-resume', root);
+    if (up) {
+      const total = up.files.reduce((n, f) => n + f.total, 0), done = up.files.reduce((n, f) => n + f.sent.length, 0);
+      resume.hidden = false;
+      resume.textContent = `Resume upload (${done} of ${total} parts sent)`;
+    } else resume.hidden = true;
+  };
+  summary();
+  addEventListener('ovg:content', summary);
+
+  const busy = on => ['#c-get', '#c-resume', '#c-send'].forEach(s => { $(s, root).disabled = on; });
+  const progress = verb => p => {
+    fill(bar, p.done, p.total);
+    say(msg, p.total ? `${verb} ${p.done} of ${p.total}${p.name ? `: ${p.name}` : ''}` : 'Everything is already up to date.');
+  };
+
+  $('#c-get', root).onclick = async () => {
+    busy(true);
+    try {
+      const r = await content.downloadChanged(progress('Downloading'));
+      say(msg, r.checked ? (r.downloaded ? `Downloaded ${plural(r.downloaded, 'file')}. The rest were already current.` : `All ${r.checked} files are current.`)
+        : 'Your Sheet has no content yet. Upload the files below.', !!r.checked);
+      dispatchEvent(new Event('ovg:content'));
+    } catch (err) { say(msg, err.message + (err.kind === 'offline' ? '' : ' Files already downloaded are kept; tap again to continue.'), false); }
+    bar.hidden = true; busy(false);
+  };
+
+  const upload = async () => {
+    busy(true);
+    try {
+      const r = await content.resumeUpload(progress('Uploading part'));
+      say(msg, `Uploaded ${plural(r.files || 0, 'file')} to your Sheet.`, true);
+      chosen = []; $('#c-chosen', root).textContent = ''; $('#c-send', root).hidden = true;
+    } catch (err) { say(msg, err.message + ' Parts already sent are kept. Tap “Resume upload” to continue.', false); }
+    bar.hidden = true; busy(false); summary(); dispatchEvent(new Event('ovg:content'));
+  };
+  $('#c-resume', root).onclick = upload;
+
+  $('#c-files', root).onchange = async e => {
+    const files = await Promise.all([...e.target.files].map(async f => ({ name: f.name, text: await f.text() })));
+    const { ok, problems } = content.checkFiles(files);
+    chosen = ok;
+    const size = ok.reduce((n, f) => n + f.text.length, 0);
+    $('#c-chosen', root).textContent = `${plural(ok.length, 'file')} ready (${kb(size)}).${problems.length ? ' ' + problems.join(' ') : ''}`;
+    const send = $('#c-send', root);
+    send.hidden = !ok.length;
+    send.textContent = `Upload ${plural(ok.length, 'file')}`;
+    e.target.value = '';
+  };
+
+  $('#c-send', root).onclick = async () => {
+    if (!chosen.length) return;
+    if (await content.uploadState()) await content.cancelUpload(); // a new choice replaces an unfinished upload
+    await content.startUpload(chosen);
+    upload();
+  };
+
+  return () => removeEventListener('ovg:content', summary);
+}
+
 /* ---------- router ---------- */
 
 let cleanup = null;
+let seq = 0;
 async function route() {
-  const name = (location.hash.match(/^#\/(\w+)/) || [])[1] || 'today';
-  const page = routes[name] || routes.today;
+  const my = ++seq;
+  const [path, ] = location.hash.replace(/^#\/?/, '').split('?');
+  const [name = 'today', ...args] = path.split('/').filter(Boolean);
+  let page = routes[name] || routes.today;
+  if (name === 'guide' && args.length) page = library.guidePage;
+  const navName = page.nav || (routes[name] ? name : 'today');
   document.querySelectorAll('.nav a').forEach(a => {
-    if (a.dataset.route === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    if (a.dataset.route === navName) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
-  document.title = `${page.title} · OVG Training`;
   if (cleanup) { try { cleanup(); } catch { /* ignore */ } cleanup = null; }
   const view = $('#view');
   try {
-    view.innerHTML = await page.render();
-    cleanup = page.bind ? page.bind(view) : null;
+    const html = await page.render(args);
+    if (my !== seq) return; // a newer navigation started while this page loaded
+    view.innerHTML = html;
+    document.title = `${page.title} · OVG Training`;
+    window.scrollTo(0, 0);
+    const c = page.bind ? await page.bind(view) : null;
+    cleanup = typeof c === 'function' ? c : null;
   } catch (err) {
+    if (my !== seq) return;
     view.innerHTML = `<h1>Something went wrong</h1><p class="msg bad">${esc(err.message)}</p>
       <p class="dim">If this says storage is blocked, turn off private browsing for this site.</p>`;
   }
   view.focus({ preventScroll: true });
-  window.scrollTo(0, 0);
 }
 
 /* ---------- toast + service worker updates ---------- */
@@ -278,14 +375,15 @@ async function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.register('sw.js');
-    const offer = w => toast('A new version is ready.', 'Reload', () => w.postMessage('skip-waiting'));
+    let wantReload = false; // only reload when the person tapped Reload (not on the very first install)
+    const offer = w => toast('A new version is ready.', 'Reload', () => { wantReload = true; w.postMessage('skip-waiting'); });
     if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
     reg.addEventListener('updatefound', () => {
       const w = reg.installing;
       w?.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w); });
     });
     let reloading = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloading) { reloading = true; location.reload(); } });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (wantReload && !reloading) { reloading = true; location.reload(); } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
   } catch { /* offline first load or unsupported: the app still works online */ }
 }
@@ -301,6 +399,11 @@ addEventListener('hashchange', route);
     return;
   }
   db.askPersistent();
+  // Every full sync also fetches book content that changed in the Sheet.
+  sync.onFullSync(async () => {
+    const r = await content.downloadChanged();
+    if (r.downloaded) dispatchEvent(new Event('ovg:content'));
+  });
   await route();
   sync.startAuto();
   registerSW();

@@ -215,6 +215,10 @@ export async function refresh() {
   return last;
 }
 
+const fullHooks = [];
+/** Run extra work (e.g. downloading changed book content) at the end of every full sync. */
+export function onFullSync(fn) { fullHooks.push(fn); }
+
 let running = null;
 /**
  * Send the outbox, then pull new logs. `full` also pulls settings.
@@ -228,7 +232,10 @@ export function syncNow({ full = false } = {}) {
       if (cfg.url && cfg.secret && navigator.onLine) {
         const f = await flush(cfg);
         const p = await pull(cfg);
-        if (full) await pullSettings(cfg);
+        if (full) {
+          await pullSettings(cfg);
+          for (const fn of fullHooks) { emit({ state: 'pulling' }); await fn(cfg); }
+        }
         emit({ state: 'synced', message: '', sent: f.sent, received: p.received });
       }
     } catch (e) {
