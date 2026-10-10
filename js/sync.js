@@ -105,11 +105,13 @@ export async function queue(items) {
 }
 
 export async function waiting() {
-  const items = await db.all('outbox');
+  const [items, dirty] = await Promise.all([db.all('outbox'), db.getValue('checkpoints', 'settings.dirty', [])]);
+  const settings = (dirty || []).length;
   return {
-    total: items.length,
+    total: items.length + settings,
     sets: items.filter(i => i.kind === 'set').length,
     sessions: items.filter(i => i.kind === 'session').length,
+    settings, // ladder marks, units, etc. not yet in the Sheet
   };
 }
 
@@ -191,22 +193,36 @@ export async function saveSetting(key, value) {
   const dirty = new Set(await db.getValue('checkpoints', 'settings.dirty', []));
   dirty.add(key);
   await db.setValue('checkpoints', 'settings.dirty', [...dirty]);
-  try { await pushSettings(); } catch { /* sent at the next sync */ }
+  let sent = false;
+  try { sent = await pushSettings(); } catch { /* sent at the next sync */ }
+  await refresh();
+  if (!sent) syncSoon();
+  return sent; // true = already in the Sheet; false = waiting on this phone
 }
 
+/** Send settings changed on this phone. Returns true when nothing is left waiting. */
 async function pushSettings(cfg) {
   const keys = await db.getValue('checkpoints', 'settings.dirty', []);
-  if (!keys.length) return;
+  if (!keys.length) return true;
   const settings = {};
   for (const k of keys) settings[k] = await db.getValue('settings', k, '');
   await call('setSettings', { settings }, cfg);
-  await db.del('checkpoints', 'settings.dirty');
+  // Keep any key that changed again while this request was out.
+  const still = [];
+  for (const k of await db.getValue('checkpoints', 'settings.dirty', [])) {
+    if (!(k in settings) || (await db.getValue('settings', k, '')) !== settings[k]) still.push(k);
+  }
+  if (still.length) await db.setValue('checkpoints', 'settings.dirty', still);
+  else await db.del('checkpoints', 'settings.dirty');
+  return !still.length;
 }
 
 async function pullSettings(cfg) {
   const res = await call('getSettings', {}, cfg);
   const now = new Date().toISOString();
-  const ops = Object.entries(res.settings || {}).map(([key, value]) => ({ store: 'settings', put: { key, value, updated_at: now } }));
+  const dirty = new Set(await db.getValue('checkpoints', 'settings.dirty', []));
+  const ops = Object.entries(res.settings || {}).filter(([key]) => !dirty.has(key)) // unsent local change wins
+    .map(([key, value]) => ({ store: 'settings', put: { key, value, updated_at: now } }));
   if (ops.length) await db.batch(ops);
 }
 
@@ -270,10 +286,10 @@ export function syncNow({ full = false } = {}) {
       const cfg = await getConfig();
       if (cfg.url && cfg.secret && navigator.onLine) {
         const f = await flush(cfg);
+        await pushSettings(cfg); // every sync sends changed settings (e.g. ladder marks made offline)
         const p = await pull(cfg);
         if (full) {
-          await pushSettings(cfg); // unsent changes first, so the pull can't undo them
-          await pullSettings(cfg);
+          await pullSettings(cfg); // after the push, so the pull can't undo a change made here
           for (const fn of fullHooks) { emit({ state: 'pulling' }); await fn(cfg); }
         }
         emit({ state: 'synced', message: '', sent: f.sent, received: p.received });

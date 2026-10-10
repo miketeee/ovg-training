@@ -7,7 +7,7 @@ import * as workouts from './workout.js';
 import * as progress from './progress.js';
 import { $, esc, plural, today, ago, kb, say, fill } from './ui.js';
 
-export const APP_VERSION = '5.0.0'; // keep in step with VERSION in sw.js
+export const APP_VERSION = '5.0.1'; // keep in step with VERSION in sw.js
 
 /* ---------- header chip + chalk line ---------- */
 
@@ -135,8 +135,9 @@ function bindSync(root) {
     const w = st.waiting || { total: 0, sets: 0, sessions: 0 };
     const n = w.sets, extra = w.sessions;
     $('#count-n', root).textContent = n;
-    $('#count', root).dataset.zero = String(n + extra === 0);
-    $('#count-label', root).innerHTML = (n === 1 ? 'set' : 'sets') + ' waiting to sync' + (extra ? `<small>plus ${plural(extra, 'workout')}</small>` : '');
+    $('#count', root).dataset.zero = String(!w.total);
+    const plus = [extra ? plural(extra, 'workout') : '', w.settings ? plural(w.settings, 'setting') : ''].filter(Boolean).join(' and ');
+    $('#count-label', root).innerHTML = (n === 1 ? 'set' : 'sets') + ' waiting to sync' + (plus ? `<small>plus ${plus}</small>` : '');
     if (!['sending', 'pulling'].includes(st.state)) {
       Promise.all([db.count('sessions'), db.count('sets'), sync.getCheckpoint()]).then(([a, b, cp]) => {
         if (!root.isConnected) return;

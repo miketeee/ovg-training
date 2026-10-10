@@ -186,5 +186,5 @@ export async function settings() {
 }
 
 export async function saveSetting(key, value) {
-  await sync.saveSetting(key, value);
+  return sync.saveSetting(key, value);
 }

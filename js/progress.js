@@ -234,13 +234,13 @@ export const ladderPage = {
     $$('[data-pass]', root).forEach(b => b.onclick = async () => {
       const on = b.getAttribute('aria-pressed') !== 'true';
       b.disabled = true;
-      await lv.setPassed(b.dataset.pass, on);
+      const { sent } = await lv.setPassed(b.dataset.pass, on);
       const html = await this.render([encodeURIComponent(this.state.p.id)]);
       const y = scrollY;
       root.innerHTML = html;
       this.bind(root);
       scrollTo(0, y);
-      say($('#ld-msg', root), on ? 'Marked passed. Saved to your Sheet.' : 'Unmarked.', true);
+      say($('#ld-msg', root), `${on ? 'Marked passed' : 'Unmarked'}. ${sent ? 'Saved to your Sheet.' : 'Saved on this phone; it goes to your Sheet when you’re back online.'}`, true);
     });
   },
 };

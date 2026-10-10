@@ -16,8 +16,8 @@ export async function passed() {
 export async function setPassed(exerciseId, on) {
   const s = await passed();
   if (on) s.add(exerciseId); else s.delete(exerciseId);
-  await sync.saveSetting(KEY, JSON.stringify([...s].sort()));
-  return s;
+  const sent = await sync.saveSetting(KEY, JSON.stringify([...s].sort()));
+  return { set: s, sent };
 }
 
 export async function data() {

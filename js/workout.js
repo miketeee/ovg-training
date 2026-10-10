@@ -88,9 +88,9 @@ export const today = {
       location.hash = `#/workout/${encodeURIComponent(id)}/add`;
     };
     $$('[data-set]', root).forEach(b => b.onclick = async () => {
-      await log.saveSetting(b.dataset.set, b.dataset.v);
+      const sent = await log.saveSetting(b.dataset.set, b.dataset.v);
       $$(`[data-set="${b.dataset.set}"]`, root).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-      say($('#set-msg', root), 'Saved. New sets use this.', true);
+      say($('#set-msg', root), sent ? 'Saved. New sets use this.' : 'Saved on this phone. New sets use this; it goes to your Sheet when you’re back online.', true);
     });
   },
 };
