@@ -164,3 +164,15 @@ Unzip `stage6-site.zip` and upload what's **inside** the folder. The new file is
 6. Tap **Start this workout**, or the named day for split routines. The workout opens with a **Still to do** list. Tap an exercise: its planned dose shows above the set form. Log a set, and the exercise leaves the list.
 7. In the Sheet, that workout's row in **Sessions** has a `plan_id` like `og-trained-beginner-static|Workout`, and **Settings** has `plan.current`.
 8. **Plan → Change plan** remembers your last choices. Building again replaces the plan.
+
+## Stage 7: README and final check
+
+No Apps Script change.
+
+1. Unzip `final-site.zip` and upload what's **inside** the folder. The new file is `README.md`, and `index.html` has changed.
+2. **On GitHub, delete `test/stage1-check.html`** if it's still there. The app's Sync page replaces it.
+3. Open the app and tap **Reload**. Sync should show **App version 7.0.0**.
+4. Check the repo on GitHub. It should contain only:
+   - `README.md`, `TESTING.md`, `.gitignore`, `index.html`, `manifest.json`, `sw.js`
+   - the `css`, `js`, `icons` and `apps-script` folders
+   - no `.json` book files, no guide `.md` files, no pictures

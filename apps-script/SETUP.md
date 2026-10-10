@@ -1,6 +1,6 @@
-# Stage 1 — Set up the Google Sheet + Apps Script back end
+# Set up the Google Sheet + Apps Script back end
 
-You only do this once. Plan on about 15 minutes. You need a computer for steps 1–5 (the script editor is awkward on a phone); step 6 is on your phone.
+You only do this once. Plan on about 15 minutes. Use a computer for steps 1–5 (the script editor is awkward on a phone); step 6 is on your phone.
 
 ## 1. Create the Sheet and paste the script
 1. Go to **sheets.google.com** and create a blank spreadsheet. Name it **OVG Training**.
@@ -41,31 +41,10 @@ curl -L -H 'Content-Type: text/plain' \
 ```
 You should see `{"pong":true,"schema":1,…,"ok":true}`. With a wrong phrase you should see `{"ok":false,"error":"Unauthorized."}`.
 
-## 6. Test on your phone
-The test page `test/stage1-check.html` needs to be served from a web address. The simplest way is the GitHub Pages site you'll use anyway:
-1. On GitHub, create a **public** repo (e.g. `ovg-training`) and add these files so the repo looks like this (folders are created by the files inside them — GitHub can't hold empty folders):
-   ```
-   .gitignore
-   apps-script/Code.gs
-   apps-script/SETUP.md
-   test/stage1-check.html
-   ```
-   Easiest way, per file: **Add file → Create new file**, type the name *with* its folder (e.g. `test/stage1-check.html` — typing the `/` makes the folder), paste the file's contents, **Commit**. Or **Add file → Upload files** and drag the downloaded `apps-script` and `test` folders in (dragging a folder keeps its name). `.gitignore` is easiest as **Create new file** (Macs hide files starting with a dot). Only `test/stage1-check.html` is strictly needed for this test. **Don't upload any book content.**
-2. Repo **Settings → Pages → Source: Deploy from a branch → main / (root) → Save**. Wait about a minute.
-3. On your phone, open `https://<your-username>.github.io/ovg-training/test/stage1-check.html`.
-4. Paste the **/exec URL** and your **secret phrase**, then tap the buttons in order:
+## 6. Connect the app
+Put the site on GitHub Pages (see **README.md**, "Set it up"), open it on your phone, go to **Sync**, paste the **/exec URL** and your **secret phrase**, and tap **Save and test**. You should see "Connected. … Your Sheet has 9 tabs."
 
-| Button | Expected |
-|---|---|
-| 1. Ping | ✔ green, `pong: true`, 9 tabs listed |
-| 2. Wrong phrase | ✔ green ("rejected"), `error: "Unauthorized."` |
-| 3. Send a test set | ✔ green: first call accepted 1 set, second call **skipped** it (no duplicate) |
-| 4. Read logs | ✔ green, at least 1 session and 1 set |
-| 5. Setting | ✔ green, `units: "lb"` |
-
-5. Open the Sheet: the **Sessions** and **Sets** tabs have your test rows ("Stage 1 test — safe to delete"). Delete those rows when you're done.
-
-The test page remembers the URL and phrase on that phone only (browser storage). The real Sync panel replaces it in Stage 2.
+The URL and phrase stay on that phone only. Each device (phone, computer) needs them entered once.
 
 ## Troubleshooting
 | Symptom | Fix |
