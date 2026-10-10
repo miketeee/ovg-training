@@ -1,17 +1,17 @@
 /**
- * OVG Training — Google Apps Script back end (Stage 1)
+ * OVG Training — Google Apps Script back end (Stage 1, + upsertLogs in Stage 4)
  *
  * Deploy as a Web app:  Execute as: Me   |   Who has access: Anyone
  * Every request must be a POST with Content-Type: text/plain and a JSON body:
  *   { "action": "<name>", "secret": "<your secret phrase>", ...params }
  * The secret phrase lives ONLY in Script Properties (key: SECRET) and on your phone.
  *
- * Actions: ping, getContent, putContent, getLogs, appendLogs,
+ * Actions: ping, getContent, putContent, getLogs, appendLogs, upsertLogs,
  *          getSettings, setSettings, setImageLink, getImage
  */
 
 // ---------- configuration ----------
-var SCHEMA_VERSION = 1;
+var SCHEMA_VERSION = 2;           // 2 = has upsertLogs (edit / delete logged sets)
 var MAX_CELL = 45000;            // Sheets cell limit is 50,000 chars; stay under it
 var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -52,7 +52,7 @@ function doPost(e) {
   }
   var handlers = {
     ping: ping_, getContent: getContent_, putContent: putContent_,
-    getLogs: getLogs_, appendLogs: appendLogs_,
+    getLogs: getLogs_, appendLogs: appendLogs_, upsertLogs: upsertLogs_,
     getSettings: getSettings_, setSettings: setSettings_,
     setImageLink: setImageLink_, getImage: getImage_
   };
@@ -199,6 +199,48 @@ function appendLogs_(req) {
       });
       if (add.length) sh.getRange(sh.getLastRow() + 1, 1, add.length, hdr.length).setValues(add);
       res[tab.toLowerCase()] = { accepted: accepted, skipped: skipped };
+    });
+    return res;
+  } finally { lock.releaseLock(); }
+}
+
+/**
+ * upsertLogs { sessions: [...], sets: [...] }  (Stage 4)
+ * New ids are added. An id already in the Sheet is replaced only when the incoming
+ * updated_at is newer, so an old retry can never undo a later edit.
+ * Deleting is a normal edit with deleted: true (the row stays, marked deleted).
+ */
+function upsertLogs_(req) {
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var res = {};
+    [['Sessions', req.sessions || []], ['Sets', req.sets || []]].forEach(function (p) {
+      var tab = p[0], items = p[1], sh = sheet_(tab), hdr = TABS[tab];
+      var uCol = hdr.indexOf('updated_at'), cCol = hdr.indexOf('created_at');
+      var vals = sh.getDataRange().getValues(), rowOf = {};
+      for (var r = 1; r < vals.length; r++) if (vals[r][0] !== '') rowOf[String(vals[r][0])] = r;
+      var now = new Date().toISOString(), add = [], accepted = [], updated = [], skipped = [];
+      items.forEach(function (it) {
+        if (!it || !it.id) return;
+        var id = String(it.id), incoming = String(it.updated_at || now);
+        var row = hdr.map(function (h) {
+          if (h === 'updated_at') return incoming;
+          if (h === 'created_at') return it.created_at || now;
+          var v = it[h]; return v === undefined || v === null ? '' : v;
+        });
+        if (rowOf[id] === undefined) {
+          rowOf[id] = -1; add.push(row); accepted.push(id); return;
+        }
+        var at = rowOf[id];
+        if (at < 0) { skipped.push(id); return; }            // same id twice in one request
+        var cur = vals[at][uCol]; cur = cur instanceof Date ? cur.toISOString() : String(cur);
+        if (incoming <= cur) { skipped.push(id); return; }  // the Sheet already has this or a newer edit
+        if (vals[at][cCol]) row[cCol] = vals[at][cCol] instanceof Date ? vals[at][cCol].toISOString() : vals[at][cCol];
+        sh.getRange(at + 1, 1, 1, hdr.length).setValues([row]);
+        vals[at] = row; updated.push(id);
+      });
+      if (add.length) sh.getRange(sh.getLastRow() + 1, 1, add.length, hdr.length).setValues(add);
+      res[tab.toLowerCase()] = { accepted: accepted, updated: updated, skipped: skipped };
     });
     return res;
   } finally { lock.releaseLock(); }

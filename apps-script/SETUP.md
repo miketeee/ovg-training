@@ -43,7 +43,14 @@ You should see `{"pong":true,"schema":1,…,"ok":true}`. With a wrong phrase you
 
 ## 6. Test on your phone
 The test page `test/stage1-check.html` needs to be served from a web address. The simplest way is the GitHub Pages site you'll use anyway:
-1. On GitHub, create a **public** repo (e.g. `ovg-training`). Upload `apps-script/`, `test/`, `.gitignore`. **Don't upload any book content** (the `.gitignore` blocks it).
+1. On GitHub, create a **public** repo (e.g. `ovg-training`) and add these files so the repo looks like this (folders are created by the files inside them — GitHub can't hold empty folders):
+   ```
+   .gitignore
+   apps-script/Code.gs
+   apps-script/SETUP.md
+   test/stage1-check.html
+   ```
+   Easiest way, per file: **Add file → Create new file**, type the name *with* its folder (e.g. `test/stage1-check.html` — typing the `/` makes the folder), paste the file's contents, **Commit**. Or **Add file → Upload files** and drag the downloaded `apps-script` and `test` folders in (dragging a folder keeps its name). `.gitignore` is easiest as **Create new file** (Macs hide files starting with a dot). Only `test/stage1-check.html` is strictly needed for this test. **Don't upload any book content.**
 2. Repo **Settings → Pages → Source: Deploy from a branch → main / (root) → Save**. Wait about a minute.
 3. On your phone, open `https://<your-username>.github.io/ovg-training/test/stage1-check.html`.
 4. Paste the **/exec URL** and your **secret phrase**, then tap the buttons in order:
@@ -82,11 +89,12 @@ The test page remembers the URL and phrase on that phone only (browser storage).
 ## API reference (all `POST`, `Content-Type: text/plain`, JSON body with `action` + `secret`)
 | Action | Params | Returns |
 |---|---|---|
-| `ping` | — | `pong, schema, time, tabs` |
+| `ping` | — | `pong, schema, time, tabs` (schema 2 = has upsertLogs) |
 | `getContent` | `name?` | no name → `files[]` (complete uploads) + `images[]`; with name → `data` (full text) |
 | `putContent` | `name, kind, upload_id, chunk_index, total_chunks, data` | `received, total_chunks, complete, exploded_rows` — re-sending a chunk is safe; a finished upload replaces the older one |
 | `getLogs` | `since?` (ISO time) | `sessions[], sets[], server_time` |
 | `appendLogs` | `sessions[], sets[]` (each with unique `id`) | per tab `accepted[]`, `skipped[]` (already in the Sheet) |
+| `upsertLogs` (Stage 4) | `sessions[], sets[]` with `updated_at` | per tab `accepted[]` (new), `updated[]` (replaced because newer), `skipped[]` (Sheet already has this or a newer edit). Deletes are edits with `deleted: true` |
 | `getSettings` | — | `settings{}` |
 | `setSettings` | `settings{}` | `saved[]` |
 | `setImageLink` | `exercise_id, figure, page, drive_link` | `key` |

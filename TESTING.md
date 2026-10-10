@@ -82,3 +82,40 @@ No change to Code.gs, so there's nothing to redeploy.
 | "That doesn't look like a Google Drive file link" | Copy the link from Drive's Share menu. It contains `/d/` followed by a long id |
 | "File is not an image" | The link points to a PDF or document. Link the image file itself |
 | Upload stopped | Tap **Resume upload**. Parts already sent are kept |
+
+## Stage 4: logging workouts
+
+### 1. Update the Apps Script (needed this time)
+Stage 4 adds one action, `upsertLogs`, so edits and deletes reach your Sheet.
+1. Open your Sheet → **Extensions → Apps Script**.
+2. Select everything in `Code.gs`, delete it, paste in the new **`apps-script/Code.gs`**, and click **💾 Save**.
+3. **Deploy → Manage deployments** → ✏ **Edit** → Version: **New version** → **Deploy**. Your /exec URL stays the same.
+   Don't use "New deployment": that makes a new URL.
+
+You don't need to run `setup` again, and the tabs don't change.
+
+### 2. Update the site on GitHub
+Unzip `stage4-site.zip` and upload what's **inside** the folder, like before. The new files are `js/log.js` and `js/workout.js`. Also replace `apps-script/Code.gs` in the repo with the new one.
+
+### 3. Test on the phone
+1. Open the app and tap **Reload**. **Sync → This phone** should show **App version 4.0.0**.
+2. On Sync, tap **Save and test**. You should see "Connected." If it says "your Apps Script is the old version", redo step 1.
+3. **Today → Start a workout**. Search `pull-ups` and tap one.
+   - Use − / + or type 5, tap an effort (say 7), then **Save set**.
+   - **Add set** starts at 5. Log 5, then a third set of 7.
+   - A green note says your last set beat your first by 2 reps: "next time try 6 reps on every set (pp. 117–118)".
+4. Tap **Set 2** to change it to 6, then **Save changes**. In the Sheet's **Sets** tab, that row now shows 6, still one row.
+5. Tap **Set 3**, then tap **Delete set** twice. In the Sheet, that row's `deleted` column shows TRUE. Rows are marked, never erased.
+6. Turn on **airplane mode** and add a set. The chip says **Offline, 1 waiting**.
+7. **Add exercise → Not in the list?** Type `Deadlift`, tap **Log it**, then log a set. Use this for moves the book uses but never teaches.
+8. Close the app completely and reopen it. Today shows **Workout in progress**: tap **Continue workout**.
+9. Turn airplane mode off. The waiting sets go to the Sheet.
+10. Type a note, then tap **Finish workout**. The workout appears under **Past workouts**. Tap it to view or edit it.
+11. **Logging settings** on Today: pick lb or kg. "Reps in reserve" is offered as an extra (NOT IN BOOK); RPE 0–10 is the book's scale.
+12. Clean up: open the test workout, tap **Delete workout** twice, then delete the old "Stage 1/2 test" rows from the Sheet by hand.
+
+| If you see | It means / do this |
+|---|---|
+| "Your Apps Script is the old version…" | Redo step 1: paste Code.gs, then Manage deployments → Edit → **New version** |
+| "Not sent, N waiting" | Open Sync to read the message. Your sets are safe on the phone |
+| An edit made on another device doesn't show | Tap **Sync now**. The newest edit wins |

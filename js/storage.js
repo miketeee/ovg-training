@@ -109,6 +109,24 @@ export async function batch(ops) {
   return done(tx);
 }
 
+/**
+ * Delete records only if they haven't changed since we read them
+ * (field `field` still equals the value we saw). Runs in one transaction.
+ * items: [{ key, value }] — returns how many were deleted.
+ */
+export async function delIfUnchanged(store, field, items) {
+  const db = await openDB();
+  const tx = db.transaction(store, 'readwrite');
+  const os = tx.objectStore(store);
+  let n = 0;
+  for (const it of items) {
+    const req = os.get(it.key);
+    req.onsuccess = () => { if (req.result && req.result[field] === it.value) { os.delete(it.key); n++; } };
+  }
+  await done(tx);
+  return n;
+}
+
 // Small key/value helpers
 export async function getValue(store, key, fallback = null) {
   try { const row = await get(store, key); return row ? row.value : fallback; }

@@ -96,7 +96,8 @@ export async function queue(items) {
     if (!record.id) throw new Error('Every record needs an id.');
     const rec = { created_at: now, ...record, updated_at: now };
     ops.push({ store: kind === 'session' ? 'sessions' : 'sets', put: rec });
-    ops.push({ store: 'outbox', put: { id: `${kind}:${rec.id}`, kind, record: rec, queued_at: now, attempts: 0 } });
+    // v = a unique version stamp, so a confirmation for an older copy never removes a newer edit
+    ops.push({ store: 'outbox', put: { id: `${kind}:${rec.id}`, kind, record: rec, queued_at: now, v: db.newId('v'), attempts: 0 } });
   }
   await db.batch(ops);
   await refresh();
@@ -121,18 +122,30 @@ async function flush(cfg) {
   for (let i = 0; i < items.length; i += BATCH) {
     const chunk = items.slice(i, i + BATCH);
     emit({ state: 'sending', done: sent, total });
-    const res = await call('appendLogs', {
+    let res;
+    try {
+      res = await call('upsertLogs', {
       sessions: chunk.filter(c => c.kind === 'session').map(c => c.record),
       sets: chunk.filter(c => c.kind === 'set').map(c => c.record),
-    }, cfg);
-    // accepted = newly written; skipped = already in the Sheet. Both mean "safe to remove".
-    const onServer = new Set([
-      ...res.sessions.accepted, ...res.sessions.skipped,
-    ].map(id => 'session:' + id).concat([...res.sets.accepted, ...res.sets.skipped].map(id => 'set:' + id)));
-    const ops = chunk.filter(c => onServer.has(c.id)).map(c => ({ store: 'outbox', del: c.id }));
-    chunk.filter(c => !onServer.has(c.id)).forEach(c => ops.push({ store: 'outbox', put: { ...c, attempts: c.attempts + 1 } }));
-    await db.batch(ops);
-    sent += ops.filter(o => 'del' in o).length;
+      }, cfg);
+    } catch (e) {
+      if (/Unknown action: upsertLogs/.test(e.message)) throw new SyncError('outdated',
+        'Your Apps Script is the old version. Paste the new Code.gs, then Deploy → Manage deployments → Edit → Version: New version → Deploy.');
+      throw e;
+    }
+    // accepted = new, updated = edit saved, skipped = the Sheet already has this (or a newer) version.
+    // All three mean the record is safe to remove from the outbox.
+    const ids = t => [...(t.accepted || []), ...(t.updated || []), ...(t.skipped || [])];
+    const onServer = new Set(ids(res.sessions).map(id => 'session:' + id).concat(ids(res.sets).map(id => 'set:' + id)));
+    // Remove what the Sheet confirmed — unless it was edited again while this request was out
+    // (same outbox id, new version stamp v). That newer version stays and goes in the next batch.
+    sent += await db.delIfUnchanged('outbox', 'v',
+      chunk.filter(c => onServer.has(c.id)).map(c => ({ key: c.id, value: c.v })));
+    const retry = chunk.filter(c => !onServer.has(c.id));
+    for (const c of retry) {
+      const cur = await db.get('outbox', c.id);
+      if (cur && cur.v === c.v) await db.put('outbox', { ...cur, attempts: (cur.attempts || 0) + 1 });
+    }
     await saveCheckpoint({ last_flush: new Date().toISOString() });
   }
   return { sent, total };
@@ -161,12 +174,33 @@ async function pull(cfg) {
   for (const [kind, store, rows] of [['session', 'sessions', res.sessions], ['set', 'sets', res.sets]]) {
     for (const row of rows || []) {
       if (!row.id || pending.has(`${kind}:${row.id}`)) continue; // our unsent edit wins
-      ops.push({ store, put: clean(row) });
+      const incoming = clean(row);
+      const mine = await db.get(store, incoming.id);
+      if (mine && String(mine.updated_at || '') > String(incoming.updated_at || '')) continue; // ours is newer
+      ops.push({ store, put: incoming });
     }
   }
   if (ops.length) await db.batch(ops);
   await saveCheckpoint({ logs_since: res.server_time, last_pull: new Date().toISOString() });
   return { received: ops.length };
+}
+
+/** Save a setting on this phone and send it to the Sheet (now, or at the next sync if offline). */
+export async function saveSetting(key, value) {
+  await db.setValue('settings', key, value);
+  const dirty = new Set(await db.getValue('checkpoints', 'settings.dirty', []));
+  dirty.add(key);
+  await db.setValue('checkpoints', 'settings.dirty', [...dirty]);
+  try { await pushSettings(); } catch { /* sent at the next sync */ }
+}
+
+async function pushSettings(cfg) {
+  const keys = await db.getValue('checkpoints', 'settings.dirty', []);
+  if (!keys.length) return;
+  const settings = {};
+  for (const k of keys) settings[k] = await db.getValue('settings', k, '');
+  await call('setSettings', { settings }, cfg);
+  await db.del('checkpoints', 'settings.dirty');
 }
 
 async function pullSettings(cfg) {
@@ -224,8 +258,13 @@ let running = null;
  * Send the outbox, then pull new logs. `full` also pulls settings.
  * Only one sync runs at a time; a second call joins the first.
  */
+let again = null; // a sync asked for while one was running: run once more afterwards
 export function syncNow({ full = false } = {}) {
-  if (running) return running;
+  if (running) {
+    // Records saved during a running sync would otherwise wait for the next trigger.
+    again = { full: full || again?.full || false };
+    return running.then(() => last);
+  }
   running = (async () => {
     try {
       const cfg = await getConfig();
@@ -233,6 +272,7 @@ export function syncNow({ full = false } = {}) {
         const f = await flush(cfg);
         const p = await pull(cfg);
         if (full) {
+          await pushSettings(cfg); // unsent changes first, so the pull can't undo them
           await pullSettings(cfg);
           for (const fn of fullHooks) { emit({ state: 'pulling' }); await fn(cfg); }
         }
@@ -244,6 +284,11 @@ export function syncNow({ full = false } = {}) {
     }
     try { await refresh(); } // keeps an error visible; otherwise settles on synced / waiting / offline
     finally { running = null; }
+    if (again && last.state !== 'error' && last.state !== 'unauthorized' && last.state !== 'offline') {
+      const next = again; again = null;
+      return syncNow(next);
+    }
+    again = null;
     return last;
   })();
   return running;
@@ -252,7 +297,7 @@ export function syncNow({ full = false } = {}) {
 let soonTimer = null;
 function syncSoon() {
   clearTimeout(soonTimer);
-  soonTimer = setTimeout(() => syncNow(), 800);
+  soonTimer = setTimeout(() => syncNow(), 400);
 }
 
 /** Start background syncing: on launch, when back online, when the app is reopened, and every minute if records wait. */

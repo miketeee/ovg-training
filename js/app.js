@@ -3,9 +3,10 @@ import * as db from './storage.js';
 import * as sync from './sync.js';
 import * as content from './content.js';
 import * as library from './library.js';
+import * as workouts from './workout.js';
 import { $, esc, plural, today, ago, kb, say, fill } from './ui.js';
 
-export const APP_VERSION = '3.0.0'; // keep in step with VERSION in sw.js
+export const APP_VERSION = '4.0.0'; // keep in step with VERSION in sw.js
 
 /* ---------- header chip + chalk line ---------- */
 
@@ -45,22 +46,8 @@ const comingSoon = (title, stage, text) => ({
 });
 
 const routes = {
-  today: {
-    title: 'Today',
-    render: async () => {
-      const [sessions, sets, cfg] = await Promise.all([db.count('sessions'), db.count('sets'), sync.getConfig()]);
-      const setUp = cfg.url && cfg.secret;
-      return `<h1>Today</h1>
-        ${setUp ? '' : `<div class="panel"><h2 style="margin-top:0">Connect your Sheet first</h2>
-          <p>Paste your Apps Script /exec URL and secret phrase so your training logs can reach your Google Sheet.</p>
-          <a class="btn primary wide" href="#/sync">Set up sync</a></div>`}
-        <div class="empty"><div class="stage">Logging arrives in Stage 4</div>
-          <p class="dim">You’ll start a workout here and log each set. It works with no signal; sets wait on the phone until they can be sent.</p></div>
-        <div class="panel"><dl class="facts">
-          <dt>Workouts on this phone</dt><dd>${sessions}</dd>
-          <dt>Sets on this phone</dt><dd>${sets}</dd></dl></div>`;
-    },
-  },
+  today: workouts.today,           // #/today
+  workout: workouts.workout,       // #/workout/<id>[?ex=<exercise id>]  and  #/workout/<id>/add
   guide: library.guideIndex,       // #/guide            and #/guide/<file>[/<section>]
   exercises: library.exerciseList, // #/exercises[?f=family&q=words]
   exercise: library.exerciseDetail,// #/exercise/<id>
@@ -121,13 +108,6 @@ async function renderSync() {
       <button class="btn primary wide" id="c-send" type="button" hidden>Upload</button>
     </details>
   </section>
-
-  <h2>Try the outbox</h2>
-  <div class="panel">
-    <p>Adds a practice set to a workout called “Stage 2 test.” Try it in airplane mode: the count above goes up, then sends itself when you’re back online.</p>
-    <button class="btn wide" id="test-set" type="button">Add a test set</button>
-    <p class="msg" id="test-msg" role="status"></p>
-  </div>
 
   <h2>This phone</h2>
   <div class="panel">
@@ -206,7 +186,9 @@ function bindSync(root) {
     try {
       const r = await sync.ping({ url, secret });
       await sync.saveConfig(url, secret);
-      show(msg, `Connected. Saved on this phone. Your Sheet has ${plural((r.tabs || []).length, 'tab')}.`, true);
+      show(msg, (r.schema || 1) < 2
+        ? 'Connected and saved, but your Apps Script is the old version. Paste the new Code.gs, then Deploy → Manage deployments → Edit → Version: New version → Deploy.'
+        : `Connected. Saved on this phone. Your Sheet has ${plural((r.tabs || []).length, 'tab')}.`, (r.schema || 1) >= 2);
       $('#forget', root).disabled = false;
       $('#c-get', root).disabled = false;
       sync.clearError();
@@ -214,25 +196,6 @@ function bindSync(root) {
     } catch (err) {
       const extra = err.kind === 'unauthorized' ? ' Check for typos, then compare it with the SECRET script property.' : '';
       show(msg, err.message + extra + ' Nothing was saved.', false);
-    }
-  };
-
-  $('#test-set', root).onclick = async () => {
-    const msg = $('#test-msg', root);
-    try {
-      const d = today(), sid = `test-s2-${d}`;
-      const existing = await db.get('sessions', sid);
-      const sets = existing ? await db.byIndex('sets', 'session_id', sid) : [];
-      const items = [];
-      if (!existing) items.push({ kind: 'session', record: { id: sid, date: d, started_at: new Date().toISOString(), notes: 'Stage 2 test — safe to delete' } });
-      items.push({ kind: 'set', record: {
-        id: db.newId('set'), session_id: sid, exercise_id: 'pullups-bar-pull-ups', set_index: sets.length + 1,
-        measure: 'reps', reps: 5, effort: 7, effort_scale: 'rpe', notes: 'Stage 2 test — safe to delete',
-      } });
-      await sync.queue(items);
-      show(msg, `Added test set ${sets.length + 1}.${navigator.onLine ? '' : ' You’re offline, so it’s waiting.'}`, true);
-    } catch (err) {
-      show(msg, 'Couldn’t save on this phone: ' + err.message, false);
     }
   };
 

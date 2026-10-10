@@ -280,3 +280,62 @@ input[type="search"]:focus { border-color: var(--birch); outline: none; }
 .pic-body { padding: 0 0 16px 26px; }
 .pic-preview img { display: block; width: 100%; margin-top: 12px; border-radius: var(--radius-control); background: #fff; }
 .pic-preview .btn { margin-top: 12px; }
+
+/* =========================================================
+   Stage 4: Today, workouts, set entry
+   ========================================================= */
+.btn.big { min-height: 64px; font-size: 19px; }
+.now { border-color: var(--birch); }
+.label-text { display: block; font-weight: 600; margin: 4px 0 8px; }
+.panel .seg + .label-text { margin-top: 14px; }
+.seg button { min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--chalk-dim); font: 600 16px/1 var(--body); }
+.seg button[aria-pressed="true"] { background: var(--mat); color: var(--chalk); box-shadow: inset 0 0 0 1px var(--mat-edge); }
+
+/* history rows: the day of the month is the rung */
+.date-num { display: flex; flex-direction: column; align-items: flex-end; width: 2.6ch; }
+.date-num small { font: 600 12px/1.2 var(--body); color: var(--chalk-dim); }
+
+textarea {
+  width: 100%; padding: 12px 14px; font: 17px/1.4 var(--body); color: var(--chalk);
+  background: var(--mat-raised); border: 1px solid var(--mat-edge); border-radius: var(--radius-control); resize: vertical;
+}
+textarea:focus { border-color: var(--birch); outline: none; }
+
+/* one exercise inside a workout */
+.block { margin: 22px 0; padding-bottom: 18px; border-bottom: 1px solid var(--mat-edge); }
+.block-head { display: flex; gap: 14px; align-items: flex-start; }
+.block-head .row-num { font-size: 40px; padding-top: 2px; }
+.block-head h2 { margin: 0 0 2px; font-size: 24px; }
+.block-head h2 a { color: var(--chalk); text-decoration: none; }
+.sets { list-style: none; margin: 12px 0; padding: 0; }
+.set-row {
+  width: 100%; min-height: var(--tap); display: flex; align-items: center; gap: 12px; padding: 0 12px;
+  background: var(--mat-raised); color: var(--chalk); border: 1px solid var(--mat-edge); border-radius: var(--radius-control);
+  margin: 0 0 6px; font: 17px/1.3 var(--body); text-align: left;
+}
+.set-n { flex: none; width: 3.6em; color: var(--chalk-dim); font-size: 15px; }
+.set-v { flex: 1; font-weight: 600; font-variant-numeric: tabular-nums; }
+.set-edit { color: var(--birch); font-size: 15px; font-weight: 600; }
+.hint { margin: 10px 0; padding: 10px 12px; border-radius: var(--radius-control); background: var(--mat-raised); border-left: 4px solid var(--sage); font-size: 16px; }
+.hint.warn { border-left-color: var(--rose); }
+.block .more { border-top: 0; margin: 4px 0 8px; }
+
+/* set entry */
+.setform { margin: 10px 0; padding: 14px; background: var(--mat-raised); border: 1px solid var(--birch); border-radius: var(--radius-panel); }
+.setform .seg { background: var(--mat); margin-bottom: 4px; }
+.setform .seg button[aria-pressed="true"] { background: var(--mat-raised); }
+.stepper { display: grid; grid-template-columns: 64px 1fr 64px; gap: 8px; }
+.stepper button { min-height: 64px; font: 700 30px/1 var(--body); border-radius: var(--radius-control); border: 1px solid var(--mat-edge); background: var(--mat); color: var(--chalk); }
+.stepper input {
+  min-height: 64px; width: 100%; text-align: center; font: 800 40px/1 var(--display); font-variant-numeric: tabular-nums;
+  color: var(--chalk); background: var(--mat); border: 1px solid var(--mat-edge); border-radius: var(--radius-control);
+  -moz-appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.effort { border: 0; margin: 14px 0 0; padding: 0; }
+.effort legend { font-weight: 600; padding: 0; margin-bottom: 8px; }
+.effort-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.effort-row button { min-height: 46px; border-radius: 10px; border: 1px solid var(--mat-edge); background: var(--mat); color: var(--chalk); font: 700 18px/1 var(--body); font-variant-numeric: tabular-nums; }
+.effort-row button[aria-pressed="true"] { background: var(--birch); border-color: var(--birch); color: var(--ink); }
+.setform .more { margin-top: 12px; }
+.setform .more input { background: var(--mat); }
