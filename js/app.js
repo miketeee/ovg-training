@@ -8,7 +8,7 @@ import * as progress from './progress.js';
 import * as plan from './plan.js';
 import { $, esc, plural, today, ago, kb, say, fill } from './ui.js';
 
-export const APP_VERSION = '7.0.0'; // keep in step with VERSION in sw.js
+export const APP_VERSION = '7.1.0'; // keep in step with VERSION in sw.js
 
 /* ---------- header chip + chalk line ---------- */
 

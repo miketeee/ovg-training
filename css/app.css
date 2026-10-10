@@ -407,3 +407,7 @@ table.data th { color: var(--chalk-dim); font-weight: 600; }
 .plan-dose { font-weight: 600; color: var(--chalk); font-size: 15px; }
 .plan-info { display: block; padding: 6px 0; }
 .planned { margin: 24px 0 14px; }
+.gear { border: 0; margin: 14px 0 0; padding: 0; }
+.gear legend { padding: 0; }
+.check { display: flex; align-items: center; gap: 12px; min-height: 44px; margin: 0; font-weight: 500; }
+.check input { width: 22px; height: 22px; accent-color: var(--birch); flex: none; }

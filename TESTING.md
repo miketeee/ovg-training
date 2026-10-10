@@ -176,3 +176,14 @@ No Apps Script change.
    - `README.md`, `TESTING.md`, `.gitignore`, `index.html`, `manifest.json`, `sw.js`
    - the `css`, `js`, `icons` and `apps-script` folders
    - no `.json` book files, no guide `.md` files, no pictures
+
+## 7.1: equipment in the plan
+
+No Apps Script change. Unzip `site-7.1.0.zip` and upload what's **inside** the folder. Then open the app and tap **Reload**: Sync should show **7.1.0**.
+
+1. Go to **Plan → Change plan**. Under **Equipment you have**, untick what you don't own. The first time, everything is ticked.
+2. The routine list now says "N exercises need gear you don't have" where that applies. Routines that fit your gear move up the list.
+3. Tap **Build my plan**. The summary lists your equipment.
+   - An exercise that needs missing gear switches to the book's own alternative when that alternative fits your gear.
+   - If the book lists no alternative, the exercise gets a red flag and a "Browse other … exercises" link.
+4. The choice is saved with your plan inputs in the Sheet (Settings → `plan.inputs`).

@@ -51,8 +51,9 @@ export function routines(programs) {
 }
 
 /** Best matches first: same tier, then days that fit, then focus. */
-export function rank(list, { tier, days, focus }) {
-  const score = r => (r.days && days >= r.days[0] && days <= r.days[1] ? 2 : 0) + (focus === 'any' || r.focus === focus || r.focus === 'both' ? 1 : 0);
+export function rank(list, { tier, days, focus }, gearGaps = () => 0) {
+  // Days that fit count most, then routines that need less gear you don't have, then focus.
+  const score = r => (r.days && days >= r.days[0] && days <= r.days[1] ? 4 : 0) - Math.min(3, gearGaps(r)) + (focus === 'any' || r.focus === focus || r.focus === 'both' ? 1 : 0);
   return list.filter(r => r.tier === tier).sort((a, b) => score(b) - score(a));
 }
 
@@ -63,6 +64,44 @@ export function suggestTier(fam) {
   const level = Math.min(...lvls);
   const t = TIERS.find(x => level >= x.range[0] && level <= x.range[1]) || (level > 13 ? TIERS[3] : TIERS[0]);
   return { tier: t.id, level };
+}
+
+/* ---------- equipment ---------- */
+// What you can tick. Everything else the book mentions (wall, floor, chair, box, block, table, stairs…)
+// is treated as something any home has.
+export const GEAR = [
+  { id: 'rings', label: 'Rings' },
+  { id: 'bar', label: 'Pull-up bar' },
+  { id: 'pbars', label: 'Parallel bars or dip station' },
+  { id: 'parallettes', label: 'Parallettes' },
+  { id: 'abwheel', label: 'Ab wheel' },
+  { id: 'pole', label: 'Vertical pole (for flags)' },
+  { id: 'rope', label: 'Climbing rope' },
+  { id: 'bands', label: 'Resistance bands or pulley' },
+  { id: 'weights', label: 'Weights (vest, dumbbells)' },
+];
+const GEAR_WORDS = [
+  [/\brings?\b/, 'rings'], [/parallel bars?|\brail\b|dip station/, 'pbars'], [/\bbar\b/, 'bar'], [/parallettes?/, 'parallettes'],
+  [/ab wheel/, 'abwheel'], [/vertical pole|\bpole\b/, 'pole'], [/\brope\b/, 'rope'], [/bands?\b|pulleys?/, 'bands'],
+  [/weight vest|dumbbell|light weights?|wrist roller/, 'weights'],
+];
+const gearOf = word => (GEAR_WORDS.find(([re]) => re.test(word)) || [])[1] || null; // null = household item
+
+/**
+ * Can you do this exercise with what you have?
+ * Each equipment entry like "rings or bar" is met if any one option is available.
+ * Returns { ok, missing: [labels] }.
+ */
+export function fits(ex, have) {
+  if (!ex || !have) return { ok: true, missing: [] };
+  const missing = [];
+  for (const entry of ex.equipment || []) {
+    if (/optional/.test(entry)) continue;
+    const options = String(entry).toLowerCase().split(/\s+or\s+|\//).map(gearOf);
+    if (options.some(g => g === null || have.has(g))) continue;
+    missing.push(entry);
+  }
+  return { ok: !missing.length, missing };
 }
 
 /* ---------- hard prerequisites the book insists on (99-gaps E) ---------- */
@@ -93,7 +132,7 @@ function doseText(it) {
  * Rule (the site's, using the book's ladders): if you've marked steps on that exercise's ladder,
  * the slot uses your next unpassed step on it; otherwise it keeps the book's pick.
  */
-export function build(r, { byId, levels, passedSet }) {
+export function build(r, { byId, levels, passedSet, have = null }) {
   const progs = new Map((levels.progressions || []).map(p => [p.id, p]));
   const icp = levels.iron_cross_prereqs;
   const icMissing = (icp?.exercise_ids || []).filter(id => !passedSet.has(id));
@@ -115,6 +154,15 @@ export function build(r, { byId, levels, passedSet }) {
             if (cur) { ex = cur; note = `Book: ${book.name} (L${book.level ?? '–'}). Your next step on this ladder is ${cur.name}.`; }
           } else if (st.top && !st.current) note = 'You’ve passed the whole ladder; the book’s pick is kept.';
         }
+        let gearNote = '', gearWarn = '';
+        if (ex && have && !fits(ex, have).ok) {
+          // 1) the book's own pick, if the ladder step needed gear you lack; 2) the book's listed alternatives.
+          const tries = [...(ex !== book && book ? [book] : []), ...(it.alt_ids || []).map(a => byId.get(a)).filter(Boolean)];
+          const swap = tries.find(t => fits(t, have).ok);
+          const need = fits(ex, have).missing.join(', ');
+          if (swap) { gearNote = `${ex.name} needs ${need}, which isn’t in your equipment. Using ${swap.name} (the book’s ${swap === book ? 'pick' : 'listed alternative'}).`; ex = swap; note = ''; }
+          else gearWarn = `Needs ${need}, which isn’t in your equipment, and the book lists no alternative for this slot. Skip it or pick another exercise.`;
+        }
         const id = ex ? ex.id : null;
         const key = id || `name:${it.name}`;
         const twins = ex?.same_as || [];
@@ -128,7 +176,8 @@ export function build(r, { byId, levels, passedSet }) {
         items.push({
           part: part.part, exercise_id: id, name: ex ? ex.name : it.name, level: ex?.level ?? null,
           dose: doseText(it), alts: (it.alt_ids || []).filter(a => a !== id).map(a => byId.get(a)?.name).filter(Boolean),
-          note: [note, it.note].filter(Boolean).join(' '), warn: warn.join(' '),
+          note: [note, gearNote, it.note].filter(Boolean).join(' '), warn: [...warn, gearWarn].filter(Boolean).join(' '),
+          no_gear: !!gearWarn, family: ex?.family || null,
           after: missing.length ? `Comes after ${missing.join(', ')} (not marked passed).` : '',
           untaught: !it.exercise_id, // A6: the book uses it but never teaches it
         });
@@ -193,7 +242,8 @@ export const planPage = {
 
     const saved = (await getJSONSetting(INPUT_KEY)) || {};
     const sug = suggestTier(fam);
-    const inputs = { tier: saved.tier || sug.tier, days: saved.days || 3, focus: saved.focus || 'any', program: saved.program || '' };
+    const inputs = { tier: saved.tier || sug.tier, days: saved.days || 3, focus: saved.focus || 'any', program: saved.program || '',
+      equipment: Array.isArray(saved.equipment) ? saved.equipment : GEAR.map(g => g.id) }; // first time: assume you have everything
     this.state.inputs = inputs;
     const famLine = Object.keys(FAMILY).filter(f => fam[f]).map(f => `${FAMILY[f]} ${fam[f].level}`).join(', ');
     return `${plan ? `<a class="back" href="#/plan">Your plan</a>` : ''}
@@ -212,6 +262,10 @@ export const planPage = {
         <span class="label-text" id="f-l">Focus</span>
         <div class="seg" role="group" aria-labelledby="f-l">
           ${[['any', 'Either'], ['static', 'Holds and skills'], ['dynamic', 'Reps and strength']].map(([v, t]) => `<button type="button" data-focus="${v}" aria-pressed="${inputs.focus === v}">${t}</button>`).join('')}</div>
+        <fieldset class="gear"><legend class="label-text">Equipment you have</legend>
+          ${GEAR.map(g => `<label class="check"><input type="checkbox" data-gear="${g.id}"${inputs.equipment.includes(g.id) ? ' checked' : ''}><span>${esc(g.label)}</span></label>`).join('')}
+          <p class="dim small">A wall, the floor, a chair, a box or a block count as things every home has. Exercises that need gear you don’t tick are swapped for the book’s own alternative when it lists one; otherwise they’re flagged.</p>
+        </fieldset>
       </div>
       <h2>Routines for this level</h2>
       <div id="pl-list"></div>
@@ -224,14 +278,20 @@ export const planPage = {
     if (!st.inputs) return bindPlan(root, st);
 
     const all = routines(st.programs);
+    const haveSet = () => new Set(st.inputs.equipment);
+    // Slots in a routine you can't fill with your gear, even after the book's alternatives.
+    const gaps = r => build(r, { byId: st.d.byId, levels: st.d.levels, passedSet: st.passedSet, have: haveSet() })
+      .days.reduce((n, d) => n + d.items.filter(i => i.no_gear).length, 0);
     const drawList = () => {
-      const list = rank(all, st.inputs);
+      const gapCache = new Map(all.map(r => [r.p.id, gaps(r)]));
+      const list = rank(all, st.inputs, r => gapCache.get(r.p.id));
       if (!list.some(r => r.p.id === st.inputs.program)) st.inputs.program = list[0]?.p.id || '';
       $('#pl-list', root).innerHTML = list.length ? `<div class="choice" role="radiogroup" aria-label="Routine">${list.map(r => `
         <button type="button" role="radio" data-prog="${esc(r.p.id)}" aria-checked="${st.inputs.program === r.p.id}">
           <b>${esc(r.p.name)}</b>
           <span>${esc([r.p.days_per_week ? `${r.p.days_per_week} days a week` : '', r.p.split, pageList(r.p.source_pages || [])].filter(Boolean).join('. '))}</span>
           ${r.days && !(st.inputs.days >= r.days[0] && st.inputs.days <= r.days[1]) ? `<span class="warn-text">The book writes this for ${esc(r.p.days_per_week)} days a week.</span>` : ''}
+          ${gapCache.get(r.p.id) ? `<span class="warn-text">${plural(gapCache.get(r.p.id), 'exercise')} need${gapCache.get(r.p.id) === 1 ? 's' : ''} gear you don’t have.</span>` : ''}
         </button>`).join('')}</div>` : '<p class="dim">The book writes out no routine for this level.</p>';
       $$('[data-prog]', root).forEach(b => b.onclick = () => {
         st.inputs.program = b.dataset.prog;
@@ -244,12 +304,16 @@ export const planPage = {
       drawList();
     });
     pick('tier', 'tier'); pick('days', 'days', Number); pick('focus', 'focus');
+    $$('[data-gear]', root).forEach(c => c.onchange = () => {
+      st.inputs.equipment = $$('[data-gear]', root).filter(x => x.checked).map(x => x.dataset.gear);
+      drawList();
+    });
     drawList();
 
     $('#pl-build', root).onclick = async () => {
       const r = all.find(x => x.p.id === st.inputs.program);
       if (!r) return say($('#pl-msg', root), 'Pick a routine first.', false);
-      const plan = build(r, { byId: st.d.byId, levels: st.d.levels, passedSet: st.passedSet });
+      const plan = build(r, { byId: st.d.byId, levels: st.d.levels, passedSet: st.passedSet, have: haveSet() });
       plan.inputs = { ...st.inputs };
       await sync.saveSetting(INPUT_KEY, JSON.stringify(st.inputs));
       await sync.saveSetting(PLAN_KEY, JSON.stringify(plan));
@@ -261,12 +325,17 @@ export const planPage = {
 
 function renderPlan(plan) {
   const swaps = plan.days.reduce((n, d) => n + d.items.filter(i => i.note && i.note.startsWith('Book:')).length, 0);
+  const all = plan.days.flatMap(d => d.items);
+  const gearSwaps = all.filter(i => /isn’t in your equipment\. Using/.test(i.note || '')).length;
+  const gearGaps = all.filter(i => i.no_gear).length;
+  const kit = plan.inputs?.equipment ? GEAR.filter(g => plan.inputs.equipment.includes(g.id)).map(g => g.label) : null;
   return `<h1>Your plan</h1>
     <section class="panel">
       <h2 style="margin-top:0">${esc(plan.program_name)}</h2>
       <p class="dim">${esc([plan.level, plan.days_per_week ? `${plan.days_per_week} days a week` : '', plan.split].filter(Boolean).join('. '))}. From ${esc(pageList(plan.source_pages))}.</p>
       ${plan.schedule ? `<p class="small"><strong>Week:</strong> ${plan.schedule.map(esc).join('; ')}</p>` : ''}
       <p class="small">${swaps ? `${plural(swaps, 'exercise')} moved to your next ladder step.` : 'Every exercise is the book’s own pick (mark ladder steps to personalise it).'} Built ${esc(new Date(plan.built_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}.</p>
+      ${kit ? `<p class="small"><strong>Equipment:</strong> ${kit.length ? esc(kit.join(', ')) : 'none ticked (floor, wall and household items only)'}.${gearSwaps ? ` ${plural(gearSwaps, 'exercise')} swapped to fit it.` : ''}${gearGaps ? ` <span class="warn-text">${plural(gearGaps, 'exercise')} still need${gearGaps === 1 ? 's' : ''} gear you don’t have.</span>` : ''}</p>` : ''}
     </section>
     ${plan.has_warmup ? '' : `<p class="small">Warm up first (Ch. 8): <a href="#/guide/02-exercises-warmup-mobility.md">warm-up and mobility</a>.</p>`}
     ${plan.days.map((d, i) => `<section class="plan-day">
@@ -281,6 +350,7 @@ function renderPlan(plan) {
           ${it.note ? `<span class="row-sub">${esc(it.note)}</span>` : ''}
           ${it.after ? `<span class="row-sub">${esc(it.after)}</span>` : ''}
           ${it.warn ? `<span class="warn-text">${esc(it.warn)}</span>` : ''}
+          ${it.no_gear && it.family ? `<a class="row-sub" href="#/exercises?f=${encodeURIComponent(it.family)}">Browse other ${esc((FAMILY[it.family] || it.family).toLowerCase())} exercises</a>` : ''}
         </div></li>`).join('')}</ol>
       <button class="btn primary wide" type="button" data-start="${i}">Start ${esc(d.name === 'Workout' ? 'this workout' : d.name)}</button>
     </section>`).join('')}

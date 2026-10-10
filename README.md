@@ -1,6 +1,6 @@
 # OVG Training
 
-A private, phone-first training app for bodyweight strength work. It works offline. My workouts, ladder marks and plan go to my own Google Sheet through an Apps Script web app that I deploy myself.
+A private, phone-first training app for bodyweight strength work, built on my own condensed notes from *Overcoming Gravity* (2nd edition, Steven Low). It works offline. My workouts, ladder marks and plan go to my own Google Sheet through an Apps Script web app that I deploy myself.
 
 **This repo holds only the app code.** The book notes (guide markdown and JSON data), the book's pictures, my secret phrase and my /exec URL are never in the repo.
 
@@ -11,7 +11,7 @@ A private, phone-first training app for bodyweight strength work. It works offli
 | **Today** | Start a workout, log sets (reps, seconds or minutes), effort as RPE 0–10, optional weight, band, rest and notes. Edit or delete any set. The book's "last set to failure" hint (pp. 117–118) and the RPE-10 overreaching warning (pp. 192–194). Closing the app mid-workout is safe: it offers to continue. |
 | **Guide** | Chapters (the guide files, with a safety note on the injury chapter), Exercises (397 moves: search, filter, ladder steps, cues, book pages), Pictures (link each illustration to a private Drive file once; keep copies for offline use). |
 | **Progress** | Charts of each exercise over time (best set, total, average effort), with a table view. Ladders for each progression: mark the steps you've passed; your level in each family is the highest step passed. |
-| **Plan** | One of the book's own routines for your level, with each slot moved to your next step on its ladder, its dose, and its book pages. Start a planned workout with a "Still to do" list. |
+| **Plan** | One of the book's own routines for your level, days a week, focus and equipment, with each slot moved to your next step on its ladder, its dose, and its book pages. Exercises needing gear you don't have use the book's alternative when one fits, or are flagged. Start a planned workout with a "Still to do" list. |
 | **Sync** | /exec URL and secret phrase (stored on this device only), an outbox count ("N sets waiting to sync"), book-content upload and download, and "Settings last sent". |
 
 There's no rest timer, by design.
@@ -115,5 +115,6 @@ These were approved choices, recorded in `99-gaps-and-questions.md` in the proje
 
 - **Family level** = the highest chart level you've passed (A2).
 - **Suggested plan level** = the lower of your Pushing and Pulling levels.
+- **Equipment** = 9 tickable items. A wall, the floor, a chair, a box or a block count as household items everyone has. "Rings or bar" means either one will do.
 - **Move-up rule** where the book gives no number: the book's general last-set-to-failure test (A3).
 - **Reps in reserve:** offered as an optional extra; RPE is the book's scale (A4).
