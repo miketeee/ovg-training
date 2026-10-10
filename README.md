@@ -1,6 +1,6 @@
 # OVG Training
 
-A private, phone-first training app for bodyweight strength work, built on my own condensed notes from *Overcoming Gravity* (2nd edition, Steven Low). It works offline. My workouts, ladder marks and plan go to my own Google Sheet through an Apps Script web app that I deploy myself.
+A private, phone-first training app for bodyweight strength work. It works offline. My workouts, ladder marks and plan go to my own Google Sheet through an Apps Script web app that I deploy myself.
 
 **This repo holds only the app code.** The book notes (guide markdown and JSON data), the book's pictures, my secret phrase and my /exec URL are never in the repo.
 
