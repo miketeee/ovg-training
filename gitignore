@@ -1,0 +1,26 @@
+# Book content must NEVER be committed (it lives in the Google Sheet only)
+content/
+*.md.local
+/0*.md
+/99-*.md
+exercises.json
+methods.json
+programs.json
+levels.json
+*export*.json
+*.content.json
+
+# Images stay in Google Drive
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+!icons/*.png
+
+# Local / dev
+dev/
+node_modules/
+.DS_Store
+.env
+*.secret
